@@ -1,0 +1,56 @@
+name: Build BTC GLOBAL CARD APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Extract Flutter source
+        run: |
+          mkdir -p /tmp/btc_source
+          ZIP_FILE=$(find . -maxdepth 1 -type f -name "*.zip" | head -n 1)
+
+          if [ -z "$ZIP_FILE" ]; then
+            echo "Flutter ZIP file not found"
+            exit 1
+          fi
+
+          echo "Using ZIP: $ZIP_FILE"
+          unzip -q "$ZIP_FILE" -d /tmp/btc_source
+
+          PUBSPEC=$(find /tmp/btc_source -name pubspec.yaml -type f | head -n 1)
+
+          if [ -z "$PUBSPEC" ]; then
+            echo "pubspec.yaml not found"
+            exit 1
+          fi
+
+          APP_DIR=$(dirname "$PUBSPEC")
+          echo "Flutter project found: $APP_DIR"
+
+          cd "$APP_DIR"
+
+          flutter create . --platforms=android
+          flutter pub get
+          flutter build apk --release
+
+          cp build/app/outputs/flutter-apk/app-release.apk /tmp/BTC_GLOBAL_CARD.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: BTC-GLOBAL-CARD-APK
+          path: /tmp/BTC_GLOBAL_CARD.apk
+          if-no-files-found: error
