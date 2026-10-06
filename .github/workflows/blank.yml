@@ -20,6 +20,7 @@ jobs:
       - name: Extract Flutter source
         run: |
           mkdir -p /tmp/btc_source
+
           ZIP_FILE=$(find . -maxdepth 1 -type f -name "*.zip" | head -n 1)
 
           if [ -z "$ZIP_FILE" ]; then
@@ -28,16 +29,18 @@ jobs:
           fi
 
           echo "Using ZIP: $ZIP_FILE"
+
           unzip -q "$ZIP_FILE" -d /tmp/btc_source
 
           PUBSPEC=$(find /tmp/btc_source -name pubspec.yaml -type f | head -n 1)
 
           if [ -z "$PUBSPEC" ]; then
-            echo "pubspec.yaml not found"
+            echo "pubspec.yaml not found in ZIP"
             exit 1
           fi
 
           APP_DIR=$(dirname "$PUBSPEC")
+
           echo "Flutter project found: $APP_DIR"
 
           cd "$APP_DIR"
