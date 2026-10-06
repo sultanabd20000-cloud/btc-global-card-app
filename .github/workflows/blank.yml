@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout source
         uses: actions/checkout@v4
 
       - name: Setup Flutter
@@ -17,15 +17,17 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Extract Flutter source
+      - name: Find and extract Flutter project
         shell: bash
         run: |
+          set -e
+
           mkdir -p /tmp/btc_source
 
-          ZIP_FILE=$(find . -maxdepth 1 -type f -name "*.zip" | head -n 1)
+          ZIP_FILE=$(find . -maxdepth 1 -type f -iname "*.zip" | head -n 1)
 
           if [ -z "$ZIP_FILE" ]; then
-            echo "Flutter ZIP file not found"
+            echo "ERROR: Flutter ZIP file not found."
             exit 1
           fi
 
@@ -33,28 +35,90 @@ jobs:
 
           unzip -q "$ZIP_FILE" -d /tmp/btc_source
 
-          PUBSPEC=$(find /tmp/btc_source -name pubspec.yaml -type f | head -n 1)
+          PUBSPEC=$(find /tmp/btc_source -type f -name "pubspec.yaml" | head -n 1)
 
           if [ -z "$PUBSPEC" ]; then
-            echo "pubspec.yaml not found in ZIP"
+            echo "ERROR: pubspec.yaml not found."
             exit 1
           fi
 
           APP_DIR=$(dirname "$PUBSPEC")
 
-          echo "Flutter project found: $APP_DIR"
+          echo "Flutter project:"
+          echo "$APP_DIR"
+
+          echo "APP_DIR=$APP_DIR" >> "$GITHUB_ENV"
+
+      - name: Prepare Flutter project
+        shell: bash
+        run: |
+          set -e
 
           cd "$APP_DIR"
 
           flutter create . --platforms=android
+
           flutter pub get
+
+      - name: Enable Android Internet permission
+        shell: bash
+        run: |
+          set -e
+
+          MANIFEST="$APP_DIR/android/app/src/main/AndroidManifest.xml"
+
+          if [ ! -f "$MANIFEST" ]; then
+            echo "ERROR: AndroidManifest.xml not found."
+            exit 1
+          fi
+
+          python3 - <<'PY'
+          import os
+
+          manifest = os.environ["APP_DIR"] + "/android/app/src/main/AndroidManifest.xml"
+
+          with open(manifest, "r", encoding="utf-8") as f:
+              data = f.read()
+
+          permission = '<uses-permission android:name="android.permission.INTERNET"/>'
+
+          if permission not in data:
+              data = data.replace(
+                  '<manifest',
+                  '<manifest',
+                  1
+              )
+
+              pos = data.find('>')
+              if pos != -1:
+                  data = data[:pos+1] + "\n    " + permission + data[pos+1:]
+
+          with open(manifest, "w", encoding="utf-8") as f:
+              f.write(data)
+
+          print("Internet permission enabled.")
+          PY
+
+      - name: Build Release APK
+        shell: bash
+        run: |
+          set -e
+
+          cd "$APP_DIR"
+
+          flutter clean
+          flutter pub get
+
           flutter build apk --release
 
-          cp build/app/outputs/flutter-apk/app-release.apk /tmp/BTC_GLOBAL_CARD.apk
+          mkdir -p /tmp/btc_apk
+
+          cp build/app/outputs/flutter-apk/app-release.apk \
+            /tmp/btc_apk/BTC_GLOBAL_CARD.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: BTC-GLOBAL-CARD-APK
-          path: /tmp/BTC_GLOBAL_CARD.apk
+          path: /tmp/btc_apk/BTC_GLOBAL_CARD.apk
           if-no-files-found: error
