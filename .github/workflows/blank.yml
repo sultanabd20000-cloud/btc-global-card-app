@@ -18,6 +18,7 @@ jobs:
           cache: true
 
       - name: Extract Flutter source
+        shell: bash
         run: |
           mkdir -p /tmp/btc_source
 
